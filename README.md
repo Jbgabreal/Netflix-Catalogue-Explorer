@@ -1,36 +1,35 @@
 # Netflix Catalogue Explorer
 
-Interactive Plotly Dash app to explore a catalogue of titles (movies & shows): filter by **Year / Country / Genre / Type**, track KPIs, and visualize insights (genres, geography, ratings mix, hit concentration, Top‑K coverage, etc.). Built to run smoothly in **Google Colab** or locally with plain Python.
+Interactive **Plotly Dash** app to explore a catalogue of titles (movies & shows). Filter by **Year / Country / Genre / Type**, track **KPIs**, and visualize insights (genres, geography, ratings mix, hit concentration, Top‑K coverage, etc.). Runs locally, in **Google Colab**, and can be deployed on **Render**.
 
 ---
 
 ## ✨ Features
 
-- **Unified filters** (Year, Country, Genre, Type) — all KPIs & charts update together.
-- **KPIs**: total titles, avg IMDb, share of mature ratings (R/NC‑17/TV‑MA), Gini (hit concentration).
+- **Unified filters** — Year, Country, Genre, Type (all charts & KPIs react together).
+- **KPIs**: total titles, average IMDb score, share of mature ratings (R/NC‑17/TV‑MA), and **Gini** (hit concentration).
 - **Explore tab**
   - **Top 10 Genres (donut)** with *Other* grouping.
   - **Word cloud** of titles.
-  - **Production choropleth** by country (alpha‑2 → alpha‑3 conversion).
-  - **Sunburst** (Type → Rating → Top‑5 Genres).
+  - **Production choropleth** by country (ISO‑2 → human names, ISO‑3 for map).
+  - **Sunburst** (Type → Rating → Top‑5 Genres, others grouped).
 - **Decision Insights tab**
-  - **Genre whitespace** (bubble: size=#titles, color=popularity) with median lines.
+  - **Genre whitespace** (bubble): size=#titles, color=popularity; dotted median lines.
   - **Ratings mix over time** (100% stacked share).
   - **Lorenz curve & Gini** (hit concentration).
 - **Drilldowns tab**
   - **Top‑genre capture** (how many genres cover 50% / 80% of demand).
-  - **Top‑K curve** (coverage vs. number of titles) + **Top‑200 page** link.
-  - **Top countries by popularity**, **Titles per year** trend.
-- **Executive summary page** (`/execsum`) — printable one‑pager.
-- **Colab‑friendly**: auto‑proxies the Dash server in an iframe.
-
-> All figures are themed (Light/Dim/Dark) via a small token map and `apply_theme` helper.
+  - **Top‑K curve** (coverage vs # titles) + **Top‑200 page** link.
+  - **Top countries by popularity** (bar), **Titles per year** (trend).
+- **Executive summary page** (`/execsum`) — printable one‑pager reflecting current filters.
+- **Theming** — Light / Dim / Dark with a small token map.
+- **Colab‑friendly** — auto‑proxies the Dash server in an iframe.
 
 ---
 
 ## 📦 Data
 
-Place a CSV called **`titles.csv`** in the working directory with at least these columns (extra columns are fine):
+Put a CSV named **`titles.csv`** in the project root with (at least) these columns (extra columns are fine):
 
 ```
 id, title, type, description, release_year, age_certification, runtime,
@@ -38,95 +37,131 @@ genres, production_countries, imdb_id, imdb_score, imdb_votes,
 tmdb_popularity, tmdb_score
 ```
 
-**Parsing helpers**:  
-- `to_list` converts mixed representations to lists (handles real lists, JSON‑style strings, comma/pipe/semicolon slugs).  
-- `normalize_genres` standardizes capitalization and removes unknowns.  
-- Country helpers (`a2_to_a3`, `a2_name`) map ISO‑2 to ISO‑3 and human names.  
-- `prepare_for_ratings` coerces years and normalizes rating labels.
+**Parsing & enrichment (handled by the app):**
 
-Derived columns created by the app:
-- `genres_list`, `production_countries_list`, `genres_norm`, `pop` (fallback from √imdb_votes when tmdb_popularity is missing).
+- `to_list` converts mixed representations to lists (real lists, JSON‑like strings, or delimited `"Drama|Comedy"`/`"Drama, Comedy"` values).
+- `normalize_genres` title‑cases and removes unknowns.
+- Country helpers (`a2_name`, `a2_to_a3`) map codes to names and ISO‑3 for maps.
+- `prepare_for_ratings` coerces year and normalizes rating labels.
+- A derived **`pop`** column is created from `tmdb_popularity` (or falls back to `sqrt(imdb_votes)` when missing).
+
+> Tip: keep big CSVs out of Git if they exceed GitHub’s size limits. You can mount storage or fetch from object storage if needed.
 
 ---
 
-## 🧰 How to run (Colab or local)
+## 🚀 Quick start (local)
 
-1. **Install once (Colab)**
-   ```python
-   !pip -q install dash==2.17.1 plotly pycountry wordcloud pillow
+1. **Create a virtual environment** (recommended) and install deps:
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+   pip install -r requirements.txt
    ```
 
-2. **Run the app cell**  
-   The provided script creates the Dash server, adds `/top200` and `/execsum` routes, and embeds the app (Colab) or serves on `http://0.0.0.0:8050` (local).
+2. **Ensure your data file exists**: `titles.csv` in the same folder as `app.py`.
 
-3. **Open helper pages**  
-   - Top‑200 table: the “Open top 200 titles →” link on the Drilldowns tab.
-   - Executive summary: “Open executive summary →” at the top of the app.
+3. **Run the app (dev server)**:
 
-> If running locally, just execute the file with `python app.py` and visit `http://localhost:8050`.
+   ```bash
+   python app.py
+   ```
 
----
+   Then open http://localhost:8050
 
-## 🧪 Mini single‑chart app (progress demos)
+4. **Production-style run (optional)** — with Gunicorn:
 
-Sometimes you just want to show **one** chart (e.g., the donut genres) while you build. Use this minimal harness:
+   ```bash
+   gunicorn --bind 0.0.0.0:8050 app:server
+   ```
 
-```python
-# 1) Build a filtered frame (or use df directly)
-dff = filtered(df, year_v="ALL", country_v="ALL", genre_v="ALL", type_v="ALL")
-
-# 2) Create the figure using any of your builders, e.g.:
-fig = fig_pie_genres(dff, theme="Light")
-
-# 3) Serve one chart
-from dash import Dash, dcc, html
-app = Dash(__name__)
-app.layout = html.Div([dcc.Graph(id="pie_genres", figure=fig)], style={"padding":"12px"})
-
-if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=8050)
-```
-
-### Optional: single‑chart switcher
-Want to switch **live** between charts without changing code? Add a dropdown to select a chart key and map it to a function; reuse the same `filtered(...)` inputs so your single‑chart app still respects filters.
+   The `app:server` entry points Gunicorn to the Flask server exposed by Dash inside `app.py`.
 
 ---
 
-## 🎛️ Filters
+## 💻 Run in Google Colab
+
+1. Upload `app.py` and `titles.csv` to your Colab workspace or mount Google Drive.  
+2. Install once:
+
+   ```python
+   !pip -q install dash==2.17.1 plotly pandas numpy pycountry wordcloud pillow gunicorn
+   ```
+
+3. Run your `app.py` cell. The notebook will display the app in an iframe and also give a link that opens the proxied URL in a new tab.
+
+---
+
+## 🌐 Deploy to Render (free tier friendly)
+
+1. **Push to GitHub**: repo with `app.py`, `requirements.txt`, and **(optionally)** `Procfile` (useful for Heroku/Railway; Render uses a Start Command instead).
+2. **Create Web Service** (Render dashboard → *New* → *Web Service* → connect your repo).
+3. **Environment**: leave defaults (Render automatically provides a `$PORT` env var).
+4. **Build Command**:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+5. **Start Command**:
+
+   ```bash
+   gunicorn --bind 0.0.0.0:$PORT app:server
+   ```
+
+   - `app` = your filename `app.py` (no extension)  
+   - `server` = the Flask server object exposed by Dash (`server = app.server` in code)
+
+6. **Deploy**. When it’s live, open the public URL Render gives you.
+
+**Notes**
+
+- The filesystem is ephemeral on deploys; keeping `titles.csv` in the repo is fine for read‑only access. For bigger/updated datasets, consider remote storage or a database.
+- You do **not** need a `Procfile` on Render (the Start Command replaces it), but including one doesn’t hurt for cross‑PaaS portability.
+- If you use health checks, `/` is a safe path.
+
+---
+
+## 🧭 App navigation
+
+- **Explore** → overview KPIs and quick context (genres, word cloud, production map, sunburst).
+- **Decision Insights** → whitespace, ratings trend, geography, hit concentration.
+- **Drilldowns** → top‑genre capture, Top‑K curve (with slider), country bars, titles‑per‑year.
+- **Links** → *Open executive summary* and *Top‑200* pages, reflecting the active filters.
+
+---
+
+## 🎛️ Filters (AND‑logic)
 
 - **Year**: all or a specific year.  
-- **Country**: ISO‑2 code behind the scenes; dropdown shows names.  
+- **Country**: dropdown labels are country names; the filter uses ISO‑2 codes internally.  
 - **Genre**: normalized, title‑cased strings.  
 - **Type**: MOVIE / SHOW / ALL.
 
-Filtering is **AND‑logic**: each selected control further narrows the dataset. If any selection yields no rows, figures gracefully show “No data”.
+All charts and KPIs react to the current filter set. When a selection yields no rows, figures gracefully show “No data”.
 
 ---
 
-## 🔍 Notable implementation details
+## 🧪 Mini “single‑chart” preview (optional)
 
-- Robust list parsing (`to_list`) so you can feed raw CSVs containing Python‑like lists (`"['Drama','Comedy']"`), JSON‑like arrays, or delimited strings like `"Drama|Comedy"`.
-- Defensive figure helpers (`_safe_fig`, `_empty_fig`) so a bad input never crashes the page.
-- Reusable route registrar (`register_html_config_route`) to avoid duplicating Flask endpoints.
-- Reusable utilities: `explode_nonempty`, `compute_topk`, `k_at`, `genre_table`, `country_top_rows`.
-- Ratings normalization via `prepare_for_ratings`, and stable `RATING_ORDER` so stacked bars never flip.
+For progress demos or to zoom into a single figure, the project includes a minimal **single‑chart switcher** that keeps the same filters and lets you pick any chart from a dropdown. It’s a small standalone Dash app using the same data/figure builders so behavior is identical.
 
 ---
 
-## 🧭 Navigation
+## 🧰 Requirements
 
-- **Explore** → overview KPIs and quick context (genres, word cloud, map, sunburst).  
-- **Decision Insights** → whitespace, ratings trend, geography, concentration.  
-- **Drilldowns** → Top‑genre capture, Top‑K, country bars, titles‑per‑year.  
-- **Links** → *Open executive summary* (printable) and *Top‑200* (table).
+```
+dash==2.17.1
+plotly>=5.22
+pandas
+numpy
+pycountry
+wordcloud
+pillow
+gunicorn
+```
 
----
-
-## 🧑‍🍳 Troubleshooting
-
-- **Executive Summary is blank** → ensure your app set `server.config["LAST_EXECSUM_HTML"]` *and* the `/execsum` route exists (this repo already wires both).  
-- **No data appears** → verify `titles.csv` exists and column names match.  
-- **Colab shows blank iframe** → make sure the cell ran to completion; the proxy URL is printed by the cell.
+Save this as **`requirements.txt`** and Render/Colab/local installs will work the same way.
 
 ---
 
@@ -134,16 +169,26 @@ Filtering is **AND‑logic**: each selected control further narrows the dataset.
 
 ```
 .
-├── app.py                # the Dash app (this file)
-├── titles.csv            # your data (not included in repo)
-├── README.md             # this document
-└── requirements.txt      # optional pin: dash==2.17.1 etc.
+├── app.py
+├── titles.csv
+├── requirements.txt
+└── README.md
 ```
 
-> Tip: GitHub’s normal file limit is ~100 MB; keep large CSVs out of the repo or use LFS.
+> Optional for other PaaS: a `Procfile` containing  
+> `web: gunicorn --bind 0.0.0.0:$PORT app:server`
 
 ---
 
-## 📜 License
+## 🧑‍⚕️ Troubleshooting
+
+- **Blank charts or no data** → verify `titles.csv` exists and column names match those listed above.
+- **“Failed to find attribute ‘server’ in ‘app’” when using Gunicorn** → ensure your file is `app.py` and that it exposes `server = app.server`. Start with `app:server`.
+- **Executive summary shows old content** → interact with the dashboard first; the summary is generated from the *current* filters.
+- **Country list doesn’t update after changing Year** → this app dynamically recomputes Country options per Year and keeps or resets the selection to a valid value.
+
+---
+
+## 📝 License
 
 MIT — use freely with attribution.
