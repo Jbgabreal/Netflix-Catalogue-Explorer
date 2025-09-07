@@ -1129,92 +1129,92 @@ def update_mini_guidance(chart_name):
         "Genres pie": {
             "title": "📊 Genres Distribution (Explore Tab)",
             "content": [
-                "• 'Other' groups the long tail; large 'Other' ⇒ diverse slate",
-                "• Watch how dominance shifts by Country/Year",
-                "• Compare genre mix across different filters"
+                "'Other' groups the long tail; large 'Other' ⇒ diverse slate",
+                "Watch how dominance shifts by Country/Year",
+                "Compare genre mix across different filters"
             ]
         },
         "Word cloud": {
             "title": "☁️ Word Cloud - Titles (Explore Tab)", 
             "content": [
-                "• Quick vibe check; filter first for better signal",
-                "• Shows most common words in titles",
-                "• Helps understand content themes and trends"
+                "Quick vibe check; filter first for better signal",
+                "Shows most common words in titles",
+                "Helps understand content themes and trends"
             ]
         },
         "Choropleth": {
             "title": "🗺️ Production Map (Explore Tab)",
             "content": [
-                "• Darker = more titles; co-productions count for each country",
-                "• See global production footprint",
-                "• Identify key production hubs and markets"
+                "Darker = more titles; co-productions count for each country",
+                "See global production footprint",
+                "Identify key production hubs and markets"
             ]
         },
         "Sunburst": {
             "title": "☀️ Type → Rating → Top-3 Genres (Explore Tab)",
             "content": [
-                "• Validate age-brand fit (e.g., TV-MA Dramas vs PG Family)",
-                "• Navigate: outer ring = type, middle = rating, inner = genres",
-                "• Check if content strategy aligns with target demographics"
+                "Validate age-brand fit (e.g., TV-MA Dramas vs PG Family)",
+                "Navigate: outer ring = type, middle = rating, inner = genres",
+                "Check if content strategy aligns with target demographics"
             ]
         },
         "Genre whitespace": {
             "title": "🎯 Genre Whitespace Analysis (Decision Insights Tab)",
             "content": [
-                "• Invest = top-right (quality at scale)",
-                "• Incubate = top-left (quality, low scale)", 
-                "• Fix quality = bottom-right (scale, weak quality)",
-                "• Avoid/experiment = bottom-left (low both)",
-                "• Use dotted medians for a quick benchmark"
+                "Invest = top-right (quality at scale)",
+                "Incubate = top-left (quality, low scale)", 
+                "Fix quality = bottom-right (scale, weak quality)",
+                "Avoid/experiment = bottom-left (low both)",
+                "Use dotted medians for a quick benchmark"
             ]
         },
         "Ratings mix": {
             "title": "📈 Ratings Mix Over Time (Decision Insights Tab)",
             "content": [
-                "• Is the slate trending more mature (TV-MA/R) or family?",
-                "• 100% stacked bars show proportion over time",
-                "• Track content strategy evolution"
+                "Is the slate trending more mature (TV-MA/R) or family?",
+                "100% stacked bars show proportion over time",
+                "Track content strategy evolution"
             ]
         },
         "Lorenz (Gini)": {
             "title": "📊 Hit Concentration Analysis (Decision Insights Tab)",
             "content": [
-                "• Diagonal = even demand; bow = few hits dominate",
-                "• Rules: <0.40 broad base; 0.40–0.60 mixed; >0.60 hit-concentrated",
-                "• Actions: high Gini → diversify/grow mid-tier; low Gini → add tentpoles"
+                "Diagonal = even demand; bow = few hits dominate",
+                "Rules: <0.40 broad base; 0.40–0.60 mixed; >0.60 hit-concentrated",
+                "Actions: high Gini → diversify/grow mid-tier; low Gini → add tentpoles"
             ]
         },
         "Top-genre capture": {
             "title": "🎯 Top-Genre Capture Analysis (Drilldowns Tab)",
             "content": [
-                "• How many genres cover 50%/80% of demand? Read x at 0.5/0.8",
-                "• Area chart shows cumulative genre coverage",
-                "• Higher curves = more diverse content strategy"
+                "How many genres cover 50%/80% of demand? Read x at 0.5/0.8",
+                "Area chart shows cumulative genre coverage",
+                "Higher curves = more diverse content strategy"
             ]
         },
         "Top-K curve": {
             "title": "📈 Top-K Curve Analysis (Drilldowns Tab)",
             "content": [
-                "• If we license top K titles, what share do we cover?",
-                "• Steep = hit-driven; flat = even spread",
-                "• Use slider to explore different K values",
-                "• Helps optimize content acquisition strategy"
+                "If we license top K titles, what share do we cover?",
+                "Steep = hit-driven; flat = even spread",
+                "Use slider to explore different K values",
+                "Helps optimize content acquisition strategy"
             ]
         },
         "Top country pop": {
             "title": "🌍 Top Countries by Popularity (Drilldowns Tab)",
             "content": [
-                "• Prioritize export/localization by demand weight",
-                "• Bar chart shows countries ranked by total popularity",
-                "• Focus on high-demand markets for expansion"
+                "Prioritize export/localization by demand weight",
+                "Bar chart shows countries ranked by total popularity",
+                "Focus on high-demand markets for expansion"
             ]
         },
         "Titles per year": {
             "title": "📅 Titles Per Year Trend (Drilldowns Tab)",
             "content": [
-                "• Volume trend; pair with Ratings mix for age shift",
-                "• Shows content production timeline",
-                "• Identify growth patterns and seasonal trends"
+                "Volume trend; pair with Ratings mix for age shift",
+                "Shows content production timeline",
+                "Identify growth patterns and seasonal trends"
             ]
         }
     }
