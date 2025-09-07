@@ -438,9 +438,14 @@ register_html_config_route(server, "/execsum", "LAST_EXECSUM_HTML",
                            endpoint="serve_execsum")
 
 DROPDOWN_CSS = """
-.Select-menu-outer { background-color: #1e1e1e !important; color: #ffffff !important; }
-.Select-menu-outer .VirtualizedSelectOption { color: #ffffff !important; }
-.Select-control, .Select-placeholder, .Select--single > .Select-control .Select-value { color: #ffffff !important; }
+.Select-menu-outer { background-color: var(--dropdown-bg, #f8fafc) !important; color: var(--dropdown-fg, #111827) !important; }
+.Select-menu-outer .VirtualizedSelectOption { color: var(--dropdown-fg, #111827) !important; }
+.Select-control, .Select-placeholder, .Select--single > .Select-control .Select-value { color: var(--dropdown-fg, #111827) !important; }
+.Select-control { background-color: var(--dropdown-bg, #f8fafc) !important; }
+.Select-menu-outer .VirtualizedSelectOption:hover { background-color: var(--dropdown-hover, #ffffff) !important; }
+/* Radio button styling */
+input[type="radio"] { accent-color: var(--dropdown-fg, #111827) !important; }
+label { color: var(--dropdown-fg, #111827) !important; }
 """
 HOWTO_CSS = """
 .howto-card{background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);
@@ -669,7 +674,15 @@ def country_options_for_year(df, year):
 def update_all(theme, year, country, genre, ctype, k_value):
     theme = theme or "Light"
     t = THEMES.get(theme, THEMES["Light"])
-    page_style = {"backgroundColor": t["bg"], "color": t["fg"], "minHeight": "100vh", "padding": "16px"}
+    page_style = {
+        "backgroundColor": t["bg"], 
+        "color": t["fg"], 
+        "minHeight": "100vh", 
+        "padding": "16px",
+        "--dropdown-bg": t["panel"],
+        "--dropdown-fg": t["fg"],
+        "--dropdown-hover": t["bg"]
+    }
 
     country_opts_dyn = country_options_for_year(df, year)
     dff = filtered(df, year, country, genre, ctype)
@@ -865,6 +878,29 @@ def ensure_valid_country(selected, options):
         return no_update
     return "ALL"
 
+# Update dropdown styling based on theme
+@app.callback(
+    Output("page", "style", allow_duplicate=True),
+    Input("theme", "value"),
+    prevent_initial_call=True
+)
+def update_dropdown_styling(theme):
+    theme = theme or "Light"
+    t = THEMES.get(theme, THEMES["Light"])
+    
+    # Update the page style with CSS custom properties for dropdowns
+    page_style = {
+        "backgroundColor": t["bg"], 
+        "color": t["fg"], 
+        "minHeight": "100vh", 
+        "padding": "16px",
+        "--dropdown-bg": t["panel"],
+        "--dropdown-fg": t["fg"],
+        "--dropdown-hover": t["bg"]
+    }
+    
+    return page_style
+
 # =========================================================
 #                    MINI APP (zoom page)
 # =========================================================
@@ -883,6 +919,12 @@ MINI_CHARTS = {
 }
 mini = Dash(__name__ + "_mini", server=server, url_base_pathname="/mini/")
 mini.title = "Single Chart Preview"
+
+# Register mini app routes with the main server
+@server.route("/mini/")
+@server.route("/mini/<path:path>")
+def serve_mini(path=None):
+    return mini.index()
 
 mini.layout = html.Div(
     style={"backgroundColor": THEMES["Light"]["bg"], "color": THEMES["Light"]["fg"], "padding": "12px"},
