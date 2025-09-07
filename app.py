@@ -681,14 +681,63 @@ def country_options_for_year(df, year):
     return opts
 
 # =========================================================
-#                  SINGLE UNIFIED CALLBACK
+#                  PROGRESSIVE LOADING CALLBACKS
 # =========================================================
+
+# Fast callback - First 6 key plots (5 seconds)
 @app.callback(
     Output("country","options"),
     Output("kpi_count","children"), Output("kpi_imdb","children"),
     Output("kpi_mature","children"), Output("kpi_gini","children"),
     Output("pie_genres","figure"), Output("wc","src"),
     Output("map_countries","figure"), Output("sunburst","figure"),
+    Input("theme","value"),
+    Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
+    Input("k_slider","value"),
+)
+def update_fast_charts(theme, year, country, genre, ctype, k_value):
+    """Fast callback - Loads first 6 key plots in ~5 seconds"""
+    
+    # Check if only theme changed - if so, skip expensive chart updates
+    ctx = callback_context
+    if ctx.triggered and len(ctx.triggered) == 1:
+        if ctx.triggered[0]['prop_id'] == 'theme.value':
+            # Only theme changed - return no_update for all chart outputs
+            return [no_update] * 8  # Return no_update for all 8 outputs
+    
+    # Data or filters changed - proceed with fast update
+    theme = theme or "Light"
+    t = THEMES.get(theme, THEMES["Light"])
+    
+    country_opts_dyn = country_options_for_year(df, year)
+    dff = filtered(df, year, country, genre, ctype)
+    is_empty = dff.empty
+
+    # Fast KPIs
+    kpi_count  = f"{len(dff):,}"
+    kpi_imdb   = f"{pd.to_numeric(dff['imdb_score'], errors='coerce').mean():.2f}" if not is_empty else "—"
+    share_mat  = dff["age_certification"].fillna("UNKNOWN").isin(MATURE).mean() if not is_empty else 0.0
+    kpi_mature = f"{share_mat:.1%}"
+    
+    # Gini coefficient (fast calculation)
+    if not is_empty and not dff["pop"].isna().all():
+        gini_val, _ = gini_from(dff["pop"].dropna())
+        kpi_gini = f"{gini_val:.3f}"
+    else:
+        kpi_gini = "—"
+
+    # Fast charts - only the most important ones
+    pie_fig = _safe_fig(fig_pie_genres, theme, "Genres distribution", dff, theme)
+    wc_img_src = _safe_wc(dff, theme)
+    
+    # Map and sunburst (key Explore tab visualizations)
+    map_fig = _safe_fig(fig_map_countries, theme, "Countries", dff, theme)
+    sunburst_fig = _safe_fig(fig_sunburst, theme, "Type/Genre breakdown", dff, theme)
+
+    return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini, pie_fig, wc_img_src, map_fig, sunburst_fig)
+
+# Background callback - Remaining charts (loads after fast charts)
+@app.callback(
     Output("kpi_topgenre","children"), Output("kpi_top10","children"),
     Output("kpi_countries","children"), Output("kpi_genres","children"),
     Output("genre_whitespace","figure"), Output("ratings_share","figure"),
@@ -703,36 +752,24 @@ def country_options_for_year(df, year):
     Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
     Input("k_slider","value"),
 )
-def update_all(theme, year, country, genre, ctype, k_value):
-    """Update data and charts - theme changes are handled separately for speed"""
+def update_background_charts(theme, year, country, genre, ctype, k_value):
+    """Background callback - Loads remaining charts after fast charts are shown"""
     
     # Check if only theme changed - if so, skip expensive chart updates
     ctx = callback_context
     if ctx.triggered and len(ctx.triggered) == 1:
         if ctx.triggered[0]['prop_id'] == 'theme.value':
             # Only theme changed - return no_update for all chart outputs
-            # Theme styling is handled by the separate callback above
-            return [no_update] * 24  # Return no_update for all 24 outputs
+            return [no_update] * 16  # Return no_update for all 16 outputs
     
-    # Data or filters changed - proceed with full update
+    # Data or filters changed - proceed with background update
     theme = theme or "Light"
     t = THEMES.get(theme, THEMES["Light"])
 
-    country_opts_dyn = country_options_for_year(df, year)
     dff = filtered(df, year, country, genre, ctype)
     is_empty = dff.empty
 
-    kpi_count  = f"{len(dff):,}"
-    kpi_imdb   = f"{pd.to_numeric(dff['imdb_score'], errors='coerce').mean():.2f}" if not is_empty else "—"
-    share_mat  = dff["age_certification"].fillna("UNKNOWN").isin(MATURE).mean() if not is_empty else 0.0
-    kpi_mature = f"{round(share_mat*100)}%"
-    gini_val, _ = gini_from(dff["pop"].clip(lower=0))
-    kpi_gini   = f"{gini_val:.2f}"
-
-    pie_fig      = _safe_fig(fig_pie_genres, theme, "Top 10 Genres", dff, theme)
-    wc_img_src   = _safe_wc(dff, theme)
-    map_explore  = _safe_fig(fig_choropleth, theme, "Titles by production country", dff, theme)
-    sunburst_fig = _safe_fig(fig_sunburst, theme, "Type → Rating → Top-3 Genres", dff, theme)
+    # Background charts - these load after the fast charts
 
     if not is_empty:
         xx = explode_nonempty(dff, "genres_norm")
@@ -894,8 +931,7 @@ def update_all(theme, year, country, genre, ctype, k_value):
     tcp_fig = _safe_fig(fig_top_country_pop, theme, "Top countries by popularity", dff, theme)
     tpy_fig = _safe_fig(fig_titles_per_year, theme, "Titles per year", dff, theme)
 
-    return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini,
-            pie_fig, wc_img_src, map_explore, sunburst_fig, kpi_topgenre, kpi_top10,
+    return (kpi_topgenre, kpi_top10,
             kpi_countries, kpi_genres, gw_fig, ratings_share_fig, dec_map_fig, lorenz_fig,
             kpi_runtime, tgc_fig, topk_fig, topk_summary, topk_link_href, tcp_fig, tpy_fig,
             execsum_href, mini_href)
