@@ -684,35 +684,18 @@ def country_options_for_year(df, year):
 #                  PROGRESSIVE LOADING CALLBACKS
 # =========================================================
 
-# Fast callback - First 6 key plots (5 seconds)
+# Ultra-fast callback - Just KPIs (instant response)
 @app.callback(
-    Output("country","options"),
     Output("kpi_count","children"), Output("kpi_imdb","children"),
     Output("kpi_mature","children"), Output("kpi_gini","children"),
-    Output("pie_genres","figure"), Output("wc","src"),
-    Output("map_countries","figure"), Output("sunburst","figure"),
-    Input("theme","value"),
     Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
-    Input("k_slider","value"),
 )
-def update_fast_charts(theme, year, country, genre, ctype, k_value):
-    """Fast callback - Loads first 6 key plots in ~5 seconds"""
+def update_kpis(year, country, genre, ctype):
+    """Ultra-fast callback - Updates KPIs instantly for immediate feedback"""
     
-    # Check if only theme changed - if so, skip expensive chart updates
-    ctx = callback_context
-    if ctx.triggered and len(ctx.triggered) == 1:
-        if ctx.triggered[0]['prop_id'] == 'theme.value':
-            # Only theme changed - return no_update for all chart outputs
-            return [no_update] * 8  # Return no_update for all 8 outputs
-    
-    # Data or filters changed - proceed with fast update
-    theme = theme or "Light"
-    t = THEMES.get(theme, THEMES["Light"])
-    
-    country_opts_dyn = country_options_for_year(df, year)
     dff = filtered(df, year, country, genre, ctype)
     is_empty = dff.empty
-
+    
     # Fast KPIs
     kpi_count  = f"{len(dff):,}"
     kpi_imdb   = f"{pd.to_numeric(dff['imdb_score'], errors='coerce').mean():.2f}" if not is_empty else "—"
@@ -725,6 +708,43 @@ def update_fast_charts(theme, year, country, genre, ctype, k_value):
         kpi_gini = f"{gini_val:.3f}"
     else:
         kpi_gini = "—"
+    
+    return (kpi_count, kpi_imdb, kpi_mature, kpi_gini)
+
+# Fast callback - Charts and country options (2-3 seconds)
+@app.callback(
+    Output("country","options"),
+    Output("pie_genres","figure"), Output("wc","src"),
+    Output("map_countries","figure"), Output("sunburst","figure"),
+    Input("theme","value"),
+    Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
+    Input("k_slider","value"),
+)
+def update_fast_charts(theme, year, country, genre, ctype, k_value):
+    """Fast callback - Loads charts in ~2-3 seconds"""
+    
+    # Smart callback context detection for better performance
+    ctx = callback_context
+    if ctx.triggered:
+        triggered_prop = ctx.triggered[0]['prop_id']
+        
+        # Only theme changed - return no_update for all chart outputs
+        if triggered_prop == 'theme.value':
+            return [no_update] * 5
+        
+        # Only k_slider changed - only affects background charts, skip fast charts
+        if triggered_prop == 'k_slider.value':
+            return [no_update] * 5
+    
+    # Data or filters changed - proceed with fast update
+    theme = theme or "Light"
+    t = THEMES.get(theme, THEMES["Light"])
+    
+    # Always calculate country options for now (can be optimized later)
+    country_opts_dyn = country_options_for_year(df, year)
+    
+    dff = filtered(df, year, country, genre, ctype)
+    is_empty = dff.empty
 
     # Fast charts - only the most important ones
     pie_fig = _safe_fig(fig_pie_genres, theme, "Genres distribution", dff, theme)
@@ -734,7 +754,7 @@ def update_fast_charts(theme, year, country, genre, ctype, k_value):
     map_fig = _safe_fig(fig_choropleth, theme, "Countries", dff, theme)
     sunburst_fig = _safe_fig(fig_sunburst, theme, "Type/Genre breakdown", dff, theme)
 
-    return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini, pie_fig, wc_img_src, map_fig, sunburst_fig)
+    return (country_opts_dyn, pie_fig, wc_img_src, map_fig, sunburst_fig)
 
 # Background callback - Remaining charts (loads after fast charts)
 @app.callback(
@@ -755,12 +775,20 @@ def update_fast_charts(theme, year, country, genre, ctype, k_value):
 def update_background_charts(theme, year, country, genre, ctype, k_value):
     """Background callback - Loads remaining charts after fast charts are shown"""
     
-    # Check if only theme changed - if so, skip expensive chart updates
+    # Smart callback context detection for better performance
     ctx = callback_context
-    if ctx.triggered and len(ctx.triggered) == 1:
-        if ctx.triggered[0]['prop_id'] == 'theme.value':
-            # Only theme changed - return no_update for all chart outputs
-            return [no_update] * 16  # Return no_update for all 16 outputs
+    if ctx.triggered:
+        triggered_prop = ctx.triggered[0]['prop_id']
+        
+        # Only theme changed - return no_update for all chart outputs
+        if triggered_prop == 'theme.value':
+            return [no_update] * 16
+        
+        # Only k_slider changed - only affects topK_curve and related outputs
+        if triggered_prop == 'k_slider.value':
+            # For k_slider, we only need to update topK_curve and related outputs
+            # Let's still do a full update but it will be faster since data filtering is the same
+            pass  # Continue with full update for now
     
     # Data or filters changed - proceed with background update
     theme = theme or "Light"
