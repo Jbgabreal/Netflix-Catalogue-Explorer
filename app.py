@@ -731,7 +731,7 @@ def update_fast_charts(theme, year, country, genre, ctype, k_value):
     wc_img_src = _safe_wc(dff, theme)
     
     # Map and sunburst (key Explore tab visualizations)
-    map_fig = _safe_fig(fig_map_countries, theme, "Countries", dff, theme)
+    map_fig = _safe_fig(fig_choropleth, theme, "Countries", dff, theme)
     sunburst_fig = _safe_fig(fig_sunburst, theme, "Type/Genre breakdown", dff, theme)
 
     return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini, pie_fig, wc_img_src, map_fig, sunburst_fig)
@@ -768,6 +768,12 @@ def update_background_charts(theme, year, country, genre, ctype, k_value):
 
     dff = filtered(df, year, country, genre, ctype)
     is_empty = dff.empty
+
+    # Calculate gini_val for executive summary
+    if not is_empty and not dff["pop"].isna().all():
+        gini_val, _ = gini_from(dff["pop"].dropna())
+    else:
+        gini_val = 0.0
 
     # Background charts - these load after the fast charts
 
