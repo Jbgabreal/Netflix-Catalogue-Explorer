@@ -249,19 +249,38 @@ def register_html_config_route(app, path, config_key, default_html, *, endpoint=
 #                    BUILD FIGURES
 # =========================================================
 def fig_pie_genres(dff, theme):
-    joined = dff["genres_norm"].apply(lambda L: "|".join(sorted(set(L))))
-    if joined.empty:
+    # Optimized version - faster processing
+    if dff.empty:
         fig = px.pie(values=[1], names=["No data"], hole=0.35, title="Top 10 Genres (with 'Other')")
         return apply_theme(fig, theme)
-    dummies = joined.str.get_dummies(sep="|").astype("int64")
-    counts = dummies.sum().sort_values(ascending=False)
-    if counts.empty:
+    
+    # Faster genre processing
+    all_genres = []
+    for genres_list in dff["genres_norm"]:
+        if isinstance(genres_list, list):
+            all_genres.extend(genres_list)
+    
+    if not all_genres:
         fig = px.pie(values=[1], names=["No data"], hole=0.35, title="Top 10 Genres (with 'Other')")
         return apply_theme(fig, theme)
-    top = counts.head(10).copy()
-    other = counts.iloc[10:].sum()
-    if other > 0: top.loc["Other"] = other
-    fig = px.pie(values=top.values, names=top.index, hole=0.35, title="Top 10 Genres (with 'Other')")
+    
+    # Count genres efficiently
+    from collections import Counter
+    genre_counts = Counter(all_genres)
+    top_genres = dict(genre_counts.most_common(10))
+    
+    # Add "Other" if there are more genres
+    if len(genre_counts) > 10:
+        other_count = sum(genre_counts.values()) - sum(top_genres.values())
+        if other_count > 0:
+            top_genres["Other"] = other_count
+    
+    if not top_genres:
+        fig = px.pie(values=[1], names=["No data"], hole=0.35, title="Top 10 Genres (with 'Other')")
+        return apply_theme(fig, theme)
+    
+    fig = px.pie(values=list(top_genres.values()), names=list(top_genres.keys()), 
+                 hole=0.35, title="Top 10 Genres (with 'Other')")
     fig.update_traces(textposition="inside", textinfo="percent+label")
     return apply_theme(fig, theme)
 
@@ -736,42 +755,30 @@ def country_options_for_year(df, year):
 #                  PROGRESSIVE LOADING CALLBACKS
 # =========================================================
 
-# Optimized single callback for Render performance
+# Data caching for better performance
+_data_cache = {}
+
+def get_cached_data(year, country, genre, ctype):
+    """Get cached filtered data or compute and cache it"""
+    cache_key = f"{year}_{country}_{genre}_{ctype}"
+    
+    if cache_key not in _data_cache:
+        _data_cache[cache_key] = filtered(df, year, country, genre, ctype)
+    
+    return _data_cache[cache_key]
+
+# Ultra-fast KPIs callback (instant response)
 @app.callback(
-    Output("country","options"),
     Output("kpi_count","children"), Output("kpi_imdb","children"),
     Output("kpi_mature","children"), Output("kpi_gini","children"),
-    Output("pie_genres","figure"), Output("wc","src"),
-    Output("map_countries","figure"), Output("sunburst","figure"),
-    Input("theme","value"),
     Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
-    Input("k_slider","value"),
+    prevent_initial_call=False
 )
-def update_main_charts(theme, year, country, genre, ctype, k_value):
-    """Optimized single callback for Render - Loads Explore tab in ~3 seconds"""
+def update_kpis_fast(year, country, genre, ctype):
+    """Ultra-fast KPIs - Updates instantly for immediate feedback"""
     
-    # Smart callback context detection for better performance
-    ctx = callback_context
-    if ctx.triggered:
-        triggered_prop = ctx.triggered[0]['prop_id']
-        
-        # Only theme changed - return no_update for all chart outputs
-        if triggered_prop == 'theme.value':
-            return [no_update] * 8
-        
-        # Only k_slider changed - only affects background charts, skip main charts
-        if triggered_prop == 'k_slider.value':
-            return [no_update] * 8
-    
-    # Data or filters changed - proceed with update
-    theme = theme or "Light"
-    t = THEMES.get(theme, THEMES["Light"])
-    
-    # Calculate country options
-    country_opts_dyn = country_options_for_year(df, year)
-    
-    # Filter data once
-    dff = filtered(df, year, country, genre, ctype)
+    # Use cached data for faster filtering
+    dff = get_cached_data(year, country, genre, ctype)
     is_empty = dff.empty
     
     # Fast KPIs
@@ -786,6 +793,44 @@ def update_main_charts(theme, year, country, genre, ctype, k_value):
         kpi_gini = f"{gini_val:.3f}"
     else:
         kpi_gini = "—"
+    
+    return (kpi_count, kpi_imdb, kpi_mature, kpi_gini)
+
+# Fast charts callback (1-2 seconds)
+@app.callback(
+    Output("country","options"),
+    Output("pie_genres","figure"), Output("wc","src"),
+    Output("map_countries","figure"), Output("sunburst","figure"),
+    Input("theme","value"),
+    Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
+    Input("k_slider","value"),
+)
+def update_charts_fast(theme, year, country, genre, ctype, k_value):
+    """Fast charts - Loads key charts in ~1-2 seconds"""
+    
+    # Smart callback context detection for better performance
+    ctx = callback_context
+    if ctx.triggered:
+        triggered_prop = ctx.triggered[0]['prop_id']
+        
+        # Only theme changed - return no_update for all chart outputs
+        if triggered_prop == 'theme.value':
+            return [no_update] * 5
+        
+        # Only k_slider changed - only affects background charts, skip main charts
+        if triggered_prop == 'k_slider.value':
+            return [no_update] * 5
+    
+    # Data or filters changed - proceed with update
+    theme = theme or "Light"
+    t = THEMES.get(theme, THEMES["Light"])
+    
+    # Calculate country options
+    country_opts_dyn = country_options_for_year(df, year)
+    
+    # Use cached data for faster filtering
+    dff = get_cached_data(year, country, genre, ctype)
+    is_empty = dff.empty
 
     # Charts - only the most important ones for Explore tab
     pie_fig = _safe_fig(fig_pie_genres, theme, "Genres distribution", dff, theme)
@@ -793,7 +838,7 @@ def update_main_charts(theme, year, country, genre, ctype, k_value):
     map_fig = _safe_fig(fig_choropleth, theme, "Countries", dff, theme)
     sunburst_fig = _safe_fig(fig_sunburst, theme, "Type/Genre breakdown", dff, theme)
 
-    return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini, pie_fig, wc_img_src, map_fig, sunburst_fig)
+    return (country_opts_dyn, pie_fig, wc_img_src, map_fig, sunburst_fig)
 
 # Loading indicator that shows during chart updates
 @app.callback(
@@ -853,7 +898,8 @@ def update_background_charts(theme, year, country, genre, ctype, k_value):
     theme = theme or "Light"
     t = THEMES.get(theme, THEMES["Light"])
 
-    dff = filtered(df, year, country, genre, ctype)
+    # Use cached data for faster filtering
+    dff = get_cached_data(year, country, genre, ctype)
     is_empty = dff.empty
 
     # Calculate gini_val for executive summary
