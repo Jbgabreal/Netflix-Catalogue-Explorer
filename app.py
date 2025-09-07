@@ -961,6 +961,12 @@ def _mini_render(chart_key, year_v, country_v, genre_v, type_v, theme_v, k):
 # =========================================================
 #                    LOCAL DEV ONLY
 # =========================================================
-if __name__ == "__main__":
-    # Local debug run (Render/Gunicorn will import app:server)
-    app.run(host="0.0.0.0", port=8050, debug=False)
+# if __name__ == "__main__":
+#     # Local debug run (Render/Gunicorn will import app:server)
+#     app.run(host="0.0.0.0", port=8050, debug=False)
+# =========================================================
+#                    LOCAL DEV ONLY
+# =========================================================
+app = Dash(__name__)
+server = app.server
+
