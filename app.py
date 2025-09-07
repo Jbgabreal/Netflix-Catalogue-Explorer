@@ -21,12 +21,6 @@ df_raw = pd.read_csv("titles.csv")
 print("Data loaded successfully")
 print(f"Dataset shape: {df_raw.shape}")
 
-# Add loading state for better UX
-LOADING_STATE = {
-    "is_loading": True,
-    "progress": 0
-}
-
 # Cache for expensive operations
 DATA_CACHE = {}
 
@@ -148,8 +142,6 @@ genre_opts = [{"label":"All genres","value":"ALL"}] + [{"label":g,"value":g} for
 type_opts = [{"label":"ALL","value":"ALL"}] + [{"label":t,"value":t} for t in ["MOVIE","SHOW"]]
 
 print("Data processing complete!")
-LOADING_STATE["is_loading"] = False
-LOADING_STATE["progress"] = 100
 
 # =========================================================
 #                       THEME TOKENS
@@ -629,68 +621,32 @@ app.layout = html.Div(
     style={"backgroundColor": THEMES["Light"]["bg"], "color": THEMES["Light"]["fg"],
            "minHeight":"100vh", "padding":"12px"},
     children=[
-        # Loading indicator
-        dcc.Loading(
-            id="loading",
-            type="default",
-            children=[
-                html.H1("Netflix Catalogue Explorer",
-                        style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
-                               "fontWeight":800,"letterSpacing":"1px"}),
-                html.Div([
-                    html.A("Open executive summary →", id="execsum_link", href="#", target="_blank",
-                           style={"textDecoration":"underline","fontWeight":600, "marginRight":"12px"}),
-                    html.A("Open mini view →", id="open_mini_link", href="/mini/", target="_blank",
-                           style={"textDecoration":"underline","fontWeight":600}),
-                ], style={"textAlign":"right","margin":"-6px 2px 8px"}),
-                controls,
-                dcc.Tabs(id="tabs", value="tab1",
-                         children=[dcc.Tab(label="Explore", value="tab1", children=tab_explore),
-                                   dcc.Tab(label="Decision Insights", value="tab2", children=tab_decisions),
-                                   dcc.Tab(label="Drilldowns", value="tab3", children=tab_drill)])
-            ]
-        )
+        html.H1("Netflix Catalogue Explorer",
+                style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
+                       "fontWeight":800,"letterSpacing":"1px"}),
+        html.Div([
+            html.A("Open executive summary →", id="execsum_link", href="#", target="_blank",
+                   style={"textDecoration":"underline","fontWeight":600, "marginRight":"12px"}),
+            html.A("Open mini view →", id="open_mini_link", href="/mini/", target="_blank",
+                   style={"textDecoration":"underline","fontWeight":600}),
+        ], style={"textAlign":"right","margin":"-6px 2px 8px"}),
+        controls,
+        dcc.Tabs(id="tabs", value="tab1",
+                 style={"backgroundColor": "var(--dropdown-bg, #f8fafc)", "color": "var(--dropdown-fg, #111827)"},
+                 children=[dcc.Tab(label="Explore", value="tab1", children=tab_explore,
+                                   style={"backgroundColor": "var(--dropdown-bg, #f8fafc)", "color": "var(--dropdown-fg, #111827)"},
+                                   selected_style={"backgroundColor": "var(--dropdown-hover, #ffffff)", "color": "var(--dropdown-fg, #111827)"}),
+                           dcc.Tab(label="Decision Insights", value="tab2", children=tab_decisions,
+                                   style={"backgroundColor": "var(--dropdown-bg, #f8fafc)", "color": "var(--dropdown-fg, #111827)"},
+                                   selected_style={"backgroundColor": "var(--dropdown-hover, #ffffff)", "color": "var(--dropdown-fg, #111827)"}),
+                           dcc.Tab(label="Drilldowns", value="tab3", children=tab_drill,
+                                   style={"backgroundColor": "var(--dropdown-bg, #f8fafc)", "color": "var(--dropdown-fg, #111827)"},
+                                   selected_style={"backgroundColor": "var(--dropdown-hover, #ffffff)", "color": "var(--dropdown-fg, #111827)"})])
     ]
 )
 app.validation_layout = app.layout
 
-# ===== Loading Progress Callback =====
-@app.callback(
-    Output("loading", "children"),
-    Input("loading", "id")
-)
-def update_loading_progress(_):
-    """Show loading progress to users"""
-    if LOADING_STATE["is_loading"]:
-        return html.Div([
-            html.H1("Netflix Catalogue Explorer",
-                    style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
-                           "fontWeight":800,"letterSpacing":"1px"}),
-            html.Div([
-                html.Div("🔄 Processing data...", 
-                        style={"textAlign":"center", "fontSize":"18px", "margin":"20px 0"}),
-                html.Div(f"Progress: {LOADING_STATE['progress']}%", 
-                        style={"textAlign":"center", "fontSize":"14px", "color":"#666"}),
-                dcc.Interval(id="loading-interval", interval=500, n_intervals=0)
-            ])
-        ])
-    else:
-        return [
-            html.H1("Netflix Catalogue Explorer",
-                    style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
-                           "fontWeight":800,"letterSpacing":"1px"}),
-            html.Div([
-                html.A("Open executive summary →", id="execsum_link", href="#", target="_blank",
-                       style={"textDecoration":"underline","fontWeight":600, "marginRight":"12px"}),
-                html.A("Open mini view →", id="open_mini_link", href="/mini/", target="_blank",
-                       style={"textDecoration":"underline","fontWeight":600}),
-            ], style={"textAlign":"right","margin":"-6px 2px 8px"}),
-            controls,
-            dcc.Tabs(id="tabs", value="tab1",
-                     children=[dcc.Tab(label="Explore", value="tab1", children=tab_explore),
-                               dcc.Tab(label="Decision Insights", value="tab2", children=tab_decisions),
-                               dcc.Tab(label="Drilldowns", value="tab3", children=tab_drill)])
-        ]
+# ===== Loading Progress Callback (Simplified) =====
 
 # ===== Safe helpers for callback =====
 def _empty_fig(title, theme):
