@@ -512,25 +512,67 @@ def make_howto_section(section_id, summary_text, bullets, *, open=False,
 
 EXPLORE_BULLETS = [
     "Use the filters (Year, Country, Genre, Type). All KPIs & charts update together.",
-    ["KPIs:", ["Total titles", "Avg IMDb", "Share mature (R/NC-17/TV-MA)", "Gini (hit concentration)"]],
-    ["Top-left: Top 10 Genres (pie).", ["‘Other’ groups the long tail."]],
-    ["Top-right: Word cloud.", ["Quick vibe check; filter first for signal."]],
-    ["Bottom-left: Production map.", ["Co-productions count for each country."]],
-    ["Bottom-right: Sunburst.", ["Type → Rating → Top genres."]],
+    ["KPIs:", [
+        "Total titles – size of the filtered catalogue.",
+        "Avg IMDb – quality proxy; compare across filters.",
+        "Share mature (R/NC-17/TV-MA) – how adult the slate is.",
+        "Gini (hit concentration) – how uneven popularity is.",
+    ]],
+    ["Top-left: Top 10 Genres (pie).", [
+        "‘Other’ groups the long tail; large ‘Other’ ⇒ diverse slate.",
+        "Watch how dominance shifts by Country/Year.",
+    ]],
+    ["Top-right: Word cloud (titles).", [
+        "Quick vibe check; filter first for better signal.",
+    ]],
+    ["Bottom-left: Production map.", [
+        "Darker = more titles; co-productions count for each country.",
+    ]],
+    ["Bottom-right: Type → Rating → Top-3 Genres (sunburst).", [
+        "Validate age-brand fit (e.g., TV-MA Dramas vs PG Family).",
+    ]],
 ]
 DECISIONS_BULLETS = [
-    ["KPIs:", ["Top genre share", "Top-10 share", "Countries covered", "Genres represented"]],
-    ["Top-left: Genre whitespace.", ["Invest / Incubate / Fix / Experiment using medians."]],
-    ["Top-right: Ratings mix over time.", []],
-    ["Bottom-left: Production map (titles).", []],
-    ["Bottom-right: Lorenz & Gini.", []],
+    ["KPIs:", [
+        "Top genre share – % popularity captured by #1 genre.",
+        "Top-10 titles share – how hit-driven the slate is.",
+        "Countries covered – breadth of production footprint.",
+        "Genres represented – breadth of creative mix.",
+    ]],
+    ["Top-left: Genre whitespace (bubble).", [
+        "Invest = top-right (quality at scale).",
+        "Incubate = top-left (quality, low scale).",
+        "Fix quality = bottom-right (scale, weak quality).",
+        "Avoid/experiment = bottom-left (low both).",
+        "Use dotted medians for a quick benchmark.",
+    ]],
+    ["Top-right: Ratings mix over time (100% stacked).", [
+        "Is the slate trending more mature (TV-MA/R) or family?",
+    ]],
+    ["Bottom-left: Production map (titles).", [
+        "See supply hubs; pair with whitespace for where to grow.",
+    ]],
+    ["Bottom-right: Hit concentration (Lorenz) & Gini.", [
+        "Diagonal = even demand; bow = few hits dominate.",
+        "Rules: <0.40 broad base; 0.40–0.60 mixed; >0.60 hit-concentrated.",
+        "Actions: high Gini → diversify/grow mid-tier; low Gini → add tentpoles.",
+    ]],
 ]
 DRILL_BULLETS = [
-    "KPI: Median runtime.",
-    ["Top-left: Top-genre capture (area).", []],
-    ["Top-right: Top-K curve (slider).", []],
-    ["Bottom-left: Top countries by popularity.", []],
-    ["Bottom-right: Titles per year.", []],
+    "KPI: Median runtime – sanity check for expected length.",
+    ["Top-left: Top-genre capture (area).", [
+        "How many genres cover 50%/80% of demand? Read x at 0.5/0.8.",
+    ]],
+    ["Top-right: Top-K curve (with slider).", [
+        "If we license top K titles, what share do we cover?",
+        "Steep = hit-driven; flat = even spread.",
+    ]],
+    ["Bottom-left: Top countries by popularity (bar).", [
+        "Prioritize export/localization by demand weight.",
+    ]],
+    ["Bottom-right: Titles per year (trend).", [
+        "Volume trend; pair with Ratings mix for age shift.",
+    ]],
 ]
 
 def howto_section_explore():  return make_howto_section("howto1","Quick tour & What to look for (Explore)",EXPLORE_BULLETS)
@@ -631,6 +673,7 @@ app.layout = html.Div(
                    style={"textDecoration":"underline","fontWeight":600}),
         ], style={"textAlign":"right","margin":"-6px 2px 8px"}),
         controls,
+        html.Div(id="loading_indicator", style={"margin": "8px 0"}),
         dcc.Tabs(id="tabs", value="tab1",
                  style={"backgroundColor": "var(--dropdown-bg, #f8fafc)", "color": "var(--dropdown-fg, #111827)"},
                  children=[dcc.Tab(label="Explore", value="tab1", children=tab_explore,
@@ -684,15 +727,41 @@ def country_options_for_year(df, year):
 #                  PROGRESSIVE LOADING CALLBACKS
 # =========================================================
 
-# Ultra-fast callback - Just KPIs (instant response)
+# Optimized single callback for Render performance
 @app.callback(
+    Output("country","options"),
     Output("kpi_count","children"), Output("kpi_imdb","children"),
     Output("kpi_mature","children"), Output("kpi_gini","children"),
+    Output("pie_genres","figure"), Output("wc","src"),
+    Output("map_countries","figure"), Output("sunburst","figure"),
+    Input("theme","value"),
     Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
+    Input("k_slider","value"),
 )
-def update_kpis(year, country, genre, ctype):
-    """Ultra-fast callback - Updates KPIs instantly for immediate feedback"""
+def update_main_charts(theme, year, country, genre, ctype, k_value):
+    """Optimized single callback for Render - Loads Explore tab in ~3 seconds"""
     
+    # Smart callback context detection for better performance
+    ctx = callback_context
+    if ctx.triggered:
+        triggered_prop = ctx.triggered[0]['prop_id']
+        
+        # Only theme changed - return no_update for all chart outputs
+        if triggered_prop == 'theme.value':
+            return [no_update] * 8
+        
+        # Only k_slider changed - only affects background charts, skip main charts
+        if triggered_prop == 'k_slider.value':
+            return [no_update] * 8
+    
+    # Data or filters changed - proceed with update
+    theme = theme or "Light"
+    t = THEMES.get(theme, THEMES["Light"])
+    
+    # Calculate country options
+    country_opts_dyn = country_options_for_year(df, year)
+    
+    # Filter data once
     dff = filtered(df, year, country, genre, ctype)
     is_empty = dff.empty
     
@@ -708,55 +777,25 @@ def update_kpis(year, country, genre, ctype):
         kpi_gini = f"{gini_val:.3f}"
     else:
         kpi_gini = "—"
-    
-    return (kpi_count, kpi_imdb, kpi_mature, kpi_gini)
 
-# Fast callback - Charts and country options (2-3 seconds)
-@app.callback(
-    Output("country","options"),
-    Output("pie_genres","figure"), Output("wc","src"),
-    Output("map_countries","figure"), Output("sunburst","figure"),
-    Input("theme","value"),
-    Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
-    Input("k_slider","value"),
-)
-def update_fast_charts(theme, year, country, genre, ctype, k_value):
-    """Fast callback - Loads charts in ~2-3 seconds"""
-    
-    # Smart callback context detection for better performance
-    ctx = callback_context
-    if ctx.triggered:
-        triggered_prop = ctx.triggered[0]['prop_id']
-        
-        # Only theme changed - return no_update for all chart outputs
-        if triggered_prop == 'theme.value':
-            return [no_update] * 5
-        
-        # Only k_slider changed - only affects background charts, skip fast charts
-        if triggered_prop == 'k_slider.value':
-            return [no_update] * 5
-    
-    # Data or filters changed - proceed with fast update
-    theme = theme or "Light"
-    t = THEMES.get(theme, THEMES["Light"])
-    
-    # Always calculate country options for now (can be optimized later)
-    country_opts_dyn = country_options_for_year(df, year)
-    
-    dff = filtered(df, year, country, genre, ctype)
-    is_empty = dff.empty
-
-    # Fast charts - only the most important ones
+    # Charts - only the most important ones for Explore tab
     pie_fig = _safe_fig(fig_pie_genres, theme, "Genres distribution", dff, theme)
     wc_img_src = _safe_wc(dff, theme)
-    
-    # Map and sunburst (key Explore tab visualizations)
     map_fig = _safe_fig(fig_choropleth, theme, "Countries", dff, theme)
     sunburst_fig = _safe_fig(fig_sunburst, theme, "Type/Genre breakdown", dff, theme)
 
-    return (country_opts_dyn, pie_fig, wc_img_src, map_fig, sunburst_fig)
+    return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini, pie_fig, wc_img_src, map_fig, sunburst_fig)
 
-# Background callback - Remaining charts (loads after fast charts)
+# Add a simple loading state for better UX
+@app.callback(
+    Output("loading_indicator", "children"),
+    Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
+)
+def show_loading(year, country, genre, ctype):
+    """Show loading indicator when filters change"""
+    return html.Div("Updating charts...", style={"textAlign": "center", "color": "#666", "fontSize": "14px"})
+
+# Background callback - Remaining charts (loads after main charts)
 @app.callback(
     Output("kpi_topgenre","children"), Output("kpi_top10","children"),
     Output("kpi_countries","children"), Output("kpi_genres","children"),
