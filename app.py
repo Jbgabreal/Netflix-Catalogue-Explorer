@@ -10,7 +10,7 @@ from wordcloud import WordCloud, STOPWORDS
 from PIL import Image
 
 from dash import Dash, dcc, html
-from dash import Input, Output, no_update
+from dash import Input, Output, no_update, callback_context
 from flask import make_response
 
 # =========================================================
@@ -651,7 +651,6 @@ def country_options_for_year(df, year):
 #                  SINGLE UNIFIED CALLBACK
 # =========================================================
 @app.callback(
-    Output("page","style"),
     Output("country","options"),
     Output("kpi_count","children"), Output("kpi_imdb","children"),
     Output("kpi_mature","children"), Output("kpi_gini","children"),
@@ -672,17 +671,19 @@ def country_options_for_year(df, year):
     Input("k_slider","value"),
 )
 def update_all(theme, year, country, genre, ctype, k_value):
+    """Update data and charts - theme changes are handled separately for speed"""
+    
+    # Check if only theme changed - if so, skip expensive chart updates
+    ctx = callback_context
+    if ctx.triggered and len(ctx.triggered) == 1:
+        if ctx.triggered[0]['prop_id'] == 'theme.value':
+            # Only theme changed - return no_update for all chart outputs
+            # Theme styling is handled by the separate callback above
+            return [no_update] * 24  # Return no_update for all 24 outputs
+    
+    # Data or filters changed - proceed with full update
     theme = theme or "Light"
     t = THEMES.get(theme, THEMES["Light"])
-    page_style = {
-        "backgroundColor": t["bg"], 
-        "color": t["fg"], 
-        "minHeight": "100vh", 
-        "padding": "16px",
-        "--dropdown-bg": t["panel"],
-        "--dropdown-fg": t["fg"],
-        "--dropdown-hover": t["bg"]
-    }
 
     country_opts_dyn = country_options_for_year(df, year)
     dff = filtered(df, year, country, genre, ctype)
@@ -860,7 +861,7 @@ def update_all(theme, year, country, genre, ctype, k_value):
     tcp_fig = _safe_fig(fig_top_country_pop, theme, "Top countries by popularity", dff, theme)
     tpy_fig = _safe_fig(fig_titles_per_year, theme, "Titles per year", dff, theme)
 
-    return (page_style, country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini,
+    return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini,
             pie_fig, wc_img_src, map_explore, sunburst_fig, kpi_topgenre, kpi_top10,
             kpi_countries, kpi_genres, gw_fig, ratings_share_fig, dec_map_fig, lorenz_fig,
             kpi_runtime, tgc_fig, topk_fig, topk_summary, topk_link_href, tcp_fig, tpy_fig,
@@ -878,18 +879,18 @@ def ensure_valid_country(selected, options):
         return no_update
     return "ALL"
 
-# Update dropdown styling based on theme
+# Fast theme-only callback for instant UI updates
 @app.callback(
     Output("page", "style", allow_duplicate=True),
     Input("theme", "value"),
     prevent_initial_call=True
 )
-def update_dropdown_styling(theme):
+def update_theme_styling(theme):
+    """Fast theme update that only changes styling without recalculating charts"""
     theme = theme or "Light"
     t = THEMES.get(theme, THEMES["Light"])
     
-    # Update the page style with CSS custom properties for dropdowns
-    page_style = {
+    return {
         "backgroundColor": t["bg"], 
         "color": t["fg"], 
         "minHeight": "100vh", 
@@ -898,8 +899,6 @@ def update_dropdown_styling(theme):
         "--dropdown-fg": t["fg"],
         "--dropdown-hover": t["bg"]
     }
-    
-    return page_style
 
 # =========================================================
 #                    MINI APP (zoom page)
