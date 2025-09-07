@@ -926,20 +926,21 @@ def serve_mini(path=None):
     return mini.index()
 
 mini.layout = html.Div(
+    id="mini_page",
     style={"backgroundColor": THEMES["Light"]["bg"], "color": THEMES["Light"]["fg"], "padding": "12px"},
     children=[
         dcc.Location(id="mini_url"),
         html.H3("Single-chart preview", style={"margin":"6px 0 10px"}),
         html.Div(style={"display":"grid","gridTemplateColumns":"1.2fr 1fr 1fr 1fr 1fr 0.8fr","gap":"10px"}, children=[
             dcc.Dropdown(id="mini_chart", options=[{"label":k,"value":k} for k in MINI_CHARTS.keys()],
-                         value="Genres pie", clearable=False),
+                         value="Genres pie", clearable=False, className="themed-dd"),
             dcc.Dropdown(id="mini_year",    options=[{"label":"All years","value":"ALL"}]+[{"label":int(y),"value":int(y)} for y in years],
-                         value="ALL", clearable=False),
-            dcc.Dropdown(id="mini_country", options=country_opts, value="ALL", clearable=False),
-            dcc.Dropdown(id="mini_genre",   options=genre_opts,   value="ALL", clearable=False),
-            dcc.Dropdown(id="mini_type",    options=type_opts,    value="ALL", clearable=False),
+                         value="ALL", clearable=False, className="themed-dd"),
+            dcc.Dropdown(id="mini_country", options=country_opts, value="ALL", clearable=False, className="themed-dd"),
+            dcc.Dropdown(id="mini_genre",   options=genre_opts,   value="ALL", clearable=False, className="themed-dd"),
+            dcc.Dropdown(id="mini_type",    options=type_opts,    value="ALL", clearable=False, className="themed-dd"),
             dcc.Dropdown(id="mini_theme",   options=[{"label":k,"value":k} for k in THEMES.keys()],
-                         value="Light", clearable=False),
+                         value="Light", clearable=False, className="themed-dd"),
         ]),
         html.Div(style={"margin":"8px 0 4px"}, children=[
             html.Label("K (Top-K curve only)"),
@@ -959,29 +960,24 @@ def _mini_country_valid(val, opts):
     values = {o["value"] for o in (opts or [])}
     return val if val in values else "ALL"
 
-# Parse query string to prefill mini controls
+# Theme callback for mini app
 @mini.callback(
-    Output("mini_chart","value"), Output("mini_year","value"), Output("mini_country","value"),
-    Output("mini_genre","value"), Output("mini_type","value"), Output("mini_theme","value"),
-    Output("mini_k","value"),
-    Input("mini_url","search")
+    Output("mini_page", "style"),
+    Input("mini_theme", "value")
 )
-def _mini_prefill(search):
-    q = urllib.parse.parse_qs((search or "").lstrip("?"))
-    def g(key, default):
-        v = q.get(key, [default])[0]
-        return v
-    chart = g("chart", "Genres pie")
-    year  = g("year", "ALL")
-    try: year = int(year) if year != "ALL" else "ALL"
-    except Exception: year = "ALL"
-    country = g("country","ALL")
-    genre   = g("genre","ALL")
-    typ     = g("type","ALL")
-    theme   = g("theme","Light") if g("theme","Light") in THEMES else "Light"
-    try: k  = int(g("k", 50))
-    except Exception: k = 50
-    return chart, year, country, genre, typ, theme, k
+def update_mini_theme(theme):
+    """Update mini app theme styling"""
+    theme = theme or "Light"
+    t = THEMES.get(theme, THEMES["Light"])
+    
+    return {
+        "backgroundColor": t["bg"], 
+        "color": t["fg"], 
+        "padding": "12px",
+        "--dropdown-bg": t["panel"],
+        "--dropdown-fg": t["fg"],
+        "--dropdown-hover": t["bg"]
+    }
 
 # Render selected figure in mini
 @mini.callback(
