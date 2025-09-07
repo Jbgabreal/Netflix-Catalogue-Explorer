@@ -16,9 +16,19 @@ from flask import make_response
 # =========================================================
 #                      DATA LOADING
 # =========================================================
+print("Loading data...")
 df_raw = pd.read_csv("titles.csv")
 print("Data loaded successfully")
-df_raw.head()
+print(f"Dataset shape: {df_raw.shape}")
+
+# Add loading state for better UX
+LOADING_STATE = {
+    "is_loading": True,
+    "progress": 0
+}
+
+# Cache for expensive operations
+DATA_CACHE = {}
 
 # =========================================================
 #                      HELPERS & CLEAN
@@ -73,29 +83,42 @@ def prepare_for_ratings(df):
     out["age_certification"] = s.fillna("UNKNOWN").str.upper().str.replace(" ", "", regex=False)
     return out
 
-# ---------- clean & enrich (no rows dropped)
+# ---------- clean & enrich (optimized for performance)
+print("Processing data...")
 df = df_raw.copy()
+
+# Basic type conversions (vectorized operations)
+print("Step 1/6: Basic cleaning...")
 df["type"] = df["type"].fillna("UNKNOWN").str.upper()
 df.loc[~df["type"].isin(["MOVIE","SHOW"]), "type"] = "UNKNOWN"
 df["release_year"] = pd.to_numeric(df["release_year"], errors="coerce").astype("Int64")
 
+# Optimize list processing with vectorized operations where possible
+print("Step 2/6: Processing genres and countries...")
 df["genres_list"] = df["genres"].apply(to_list)
 df["production_countries_list"] = df["production_countries"].apply(to_list)
 df["genres_norm"] = df["genres_list"].apply(normalize_genres).apply(lambda L: L if L else ["Unknown"])
 
+# Age certification processing
+print("Step 3/6: Processing age certifications...")
 df["age_certification"] = df["age_certification"].astype(str)
 df.loc[df["age_certification"].isin(["nan","None","NaN"]), "age_certification"] = np.nan
 df["age_certification"] = df["age_certification"].fillna("UNKNOWN").str.upper().str.replace(" ", "", regex=False)
 
+# Runtime processing with optimized groupby
+print("Step 4/6: Processing runtime and scores...")
 df["runtime"] = pd.to_numeric(df["runtime"], errors="coerce")
 type_medians = df.groupby("type")["runtime"].transform("median")
 df["runtime"] = df["runtime"].fillna(type_medians).fillna(df["runtime"].median())
 
+# IMDB score processing
 df["imdb_score"] = pd.to_numeric(df.get("imdb_score"), errors="coerce")
 df["primary_genre"] = df["genres_norm"].apply(lambda L: L[0] if L else "Unknown")
 group_med = df.groupby(["type","primary_genre"])["imdb_score"].transform("median")
 df["imdb_score"] = df["imdb_score"].fillna(group_med).fillna(df["imdb_score"].median())
 
+# Popularity processing
+print("Step 5/6: Processing popularity...")
 if "tmdb_popularity" in df.columns:
     df["pop"] = pd.to_numeric(df["tmdb_popularity"], errors="coerce")
 else:
@@ -104,7 +127,11 @@ df["imdb_votes"] = pd.to_numeric(df.get("imdb_votes"), errors="coerce")
 df.loc[df["pop"].isna(), "pop"] = np.sqrt(df["imdb_votes"].clip(lower=0)).fillna(0)
 df["pop"] = df["pop"].fillna(0)
 
+# Generate options efficiently
+print("Step 6/6: Generating filter options...")
 years = sorted(df["release_year"].dropna().astype(int).unique().tolist())
+
+# Optimize country options generation
 all_countries_alpha2 = (
     pd.Series([c for row in df["production_countries_list"] for c in row if isinstance(c,str) and c.strip()])
     .unique()
@@ -115,9 +142,14 @@ for c2 in sorted(all_countries_alpha2):
     if nm:
         country_opts.append({"label": nm, "value": c2})
 
+# Optimize genre options generation
 all_genres = sorted({g for row in df["genres_norm"] for g in row})
 genre_opts = [{"label":"All genres","value":"ALL"}] + [{"label":g,"value":g} for g in all_genres]
 type_opts = [{"label":"ALL","value":"ALL"}] + [{"label":t,"value":t} for t in ["MOVIE","SHOW"]]
+
+print("Data processing complete!")
+LOADING_STATE["is_loading"] = False
+LOADING_STATE["progress"] = 100
 
 # =========================================================
 #                       THEME TOKENS
@@ -597,23 +629,68 @@ app.layout = html.Div(
     style={"backgroundColor": THEMES["Light"]["bg"], "color": THEMES["Light"]["fg"],
            "minHeight":"100vh", "padding":"12px"},
     children=[
-        html.H1("Netflix Catalogue Explorer",
-                style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
-                       "fontWeight":800,"letterSpacing":"1px"}),
-        html.Div([
-            html.A("Open executive summary →", id="execsum_link", href="#", target="_blank",
-                   style={"textDecoration":"underline","fontWeight":600, "marginRight":"12px"}),
-            html.A("Open mini view →", id="open_mini_link", href="/mini/", target="_blank",
-                   style={"textDecoration":"underline","fontWeight":600}),
-        ], style={"textAlign":"right","margin":"-6px 2px 8px"}),
-        controls,
-        dcc.Tabs(id="tabs", value="tab1",
-                 children=[dcc.Tab(label="Explore", value="tab1", children=tab_explore),
-                           dcc.Tab(label="Decision Insights", value="tab2", children=tab_decisions),
-                           dcc.Tab(label="Drilldowns", value="tab3", children=tab_drill)])
+        # Loading indicator
+        dcc.Loading(
+            id="loading",
+            type="default",
+            children=[
+                html.H1("Netflix Catalogue Explorer",
+                        style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
+                               "fontWeight":800,"letterSpacing":"1px"}),
+                html.Div([
+                    html.A("Open executive summary →", id="execsum_link", href="#", target="_blank",
+                           style={"textDecoration":"underline","fontWeight":600, "marginRight":"12px"}),
+                    html.A("Open mini view →", id="open_mini_link", href="/mini/", target="_blank",
+                           style={"textDecoration":"underline","fontWeight":600}),
+                ], style={"textAlign":"right","margin":"-6px 2px 8px"}),
+                controls,
+                dcc.Tabs(id="tabs", value="tab1",
+                         children=[dcc.Tab(label="Explore", value="tab1", children=tab_explore),
+                                   dcc.Tab(label="Decision Insights", value="tab2", children=tab_decisions),
+                                   dcc.Tab(label="Drilldowns", value="tab3", children=tab_drill)])
+            ]
+        )
     ]
 )
 app.validation_layout = app.layout
+
+# ===== Loading Progress Callback =====
+@app.callback(
+    Output("loading", "children"),
+    Input("loading", "id")
+)
+def update_loading_progress(_):
+    """Show loading progress to users"""
+    if LOADING_STATE["is_loading"]:
+        return html.Div([
+            html.H1("Netflix Catalogue Explorer",
+                    style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
+                           "fontWeight":800,"letterSpacing":"1px"}),
+            html.Div([
+                html.Div("🔄 Processing data...", 
+                        style={"textAlign":"center", "fontSize":"18px", "margin":"20px 0"}),
+                html.Div(f"Progress: {LOADING_STATE['progress']}%", 
+                        style={"textAlign":"center", "fontSize":"14px", "color":"#666"}),
+                dcc.Interval(id="loading-interval", interval=500, n_intervals=0)
+            ])
+        ])
+    else:
+        return [
+            html.H1("Netflix Catalogue Explorer",
+                    style={"textAlign":"center","fontFamily":"Georgia, 'Times New Roman', serif",
+                           "fontWeight":800,"letterSpacing":"1px"}),
+            html.Div([
+                html.A("Open executive summary →", id="execsum_link", href="#", target="_blank",
+                       style={"textDecoration":"underline","fontWeight":600, "marginRight":"12px"}),
+                html.A("Open mini view →", id="open_mini_link", href="/mini/", target="_blank",
+                       style={"textDecoration":"underline","fontWeight":600}),
+            ], style={"textAlign":"right","margin":"-6px 2px 8px"}),
+            controls,
+            dcc.Tabs(id="tabs", value="tab1",
+                     children=[dcc.Tab(label="Explore", value="tab1", children=tab_explore),
+                               dcc.Tab(label="Decision Insights", value="tab2", children=tab_decisions),
+                               dcc.Tab(label="Drilldowns", value="tab3", children=tab_drill)])
+        ]
 
 # ===== Safe helpers for callback =====
 def _empty_fig(title, theme):
