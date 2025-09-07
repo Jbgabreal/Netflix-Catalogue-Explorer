@@ -795,14 +795,25 @@ def update_main_charts(theme, year, country, genre, ctype, k_value):
 
     return (country_opts_dyn, kpi_count, kpi_imdb, kpi_mature, kpi_gini, pie_fig, wc_img_src, map_fig, sunburst_fig)
 
-# Add a simple loading state for better UX
+# Loading indicator that shows during chart updates
 @app.callback(
     Output("loading_indicator", "children"),
     Input("year","value"), Input("country","value"), Input("genre","value"), Input("ctype","value"),
+    prevent_initial_call=True
 )
 def show_loading(year, country, genre, ctype):
     """Show loading indicator when filters change"""
     return html.Div("Updating charts...", style={"textAlign": "center", "color": "#666", "fontSize": "14px"})
+
+# Clear loading indicator when main charts are updated
+@app.callback(
+    Output("loading_indicator", "children", allow_duplicate=True),
+    Input("pie_genres","figure"), Input("wc","src"), Input("map_countries","figure"), Input("sunburst","figure"),
+    prevent_initial_call=True
+)
+def clear_loading(pie_fig, wc_src, map_fig, sunburst_fig):
+    """Clear loading indicator when main charts are updated"""
+    return html.Div()  # Empty div to hide loading indicator
 
 # Background callback - Remaining charts (loads after main charts)
 @app.callback(
