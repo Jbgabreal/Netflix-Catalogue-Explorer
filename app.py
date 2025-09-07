@@ -467,6 +467,15 @@ DROPDOWN_CSS = """
 .Select-control, .Select-placeholder, .Select--single > .Select-control .Select-value { color: var(--dropdown-fg, #111827) !important; }
 .Select-control { background-color: var(--dropdown-bg, #f8fafc) !important; }
 .Select-menu-outer .VirtualizedSelectOption:hover { background-color: var(--dropdown-hover, #ffffff) !important; }
+/* Placeholder styling for all themes */
+.Select-placeholder { color: var(--dropdown-fg, #111827) !important; opacity: 0.7 !important; }
+.Select--single > .Select-control .Select-placeholder { color: var(--dropdown-fg, #111827) !important; opacity: 0.7 !important; }
+.Select--single > .Select-control .Select-value-label { color: var(--dropdown-fg, #111827) !important; }
+/* Additional placeholder targeting for better visibility */
+.Select-control .Select-placeholder, .Select-control .Select-value { color: var(--dropdown-fg, #111827) !important; }
+.Select-control .Select-placeholder { opacity: 0.6 !important; }
+/* Ensure dropdown input text is visible */
+.Select-input > input { color: var(--dropdown-fg, #111827) !important; }
 /* Radio button styling */
 input[type="radio"] { accent-color: var(--dropdown-fg, #111827) !important; }
 label { color: var(--dropdown-fg, #111827) !important; }
@@ -1088,7 +1097,9 @@ mini.layout = html.Div(
             html.Label("K (Top-K curve only)"),
             dcc.Slider(10, 200, 10, value=50, id="mini_k", tooltip={"always_visible":False}),
         ]),
-        dcc.Graph(id="mini_figure", style={"height":"78vh"}, config={"scrollZoom": True}),
+        # Dynamic guidance section based on selected chart
+        html.Div(id="mini_guidance", style={"margin":"8px 0", "padding":"12px", "backgroundColor":"var(--dropdown-bg, #f8fafc)", "borderRadius":"8px", "border":"1px solid var(--dropdown-hover, #e5e7eb)"}),
+        dcc.Graph(id="mini_figure", style={"height":"70vh"}, config={"scrollZoom": True}),
     ]
 )
 
@@ -1096,6 +1107,118 @@ mini.layout = html.Div(
 @mini.callback(Output("mini_country","options"), Input("mini_year","value"))
 def _mini_country_opts(y):
     return country_options_for_year(df, y)
+
+# Dynamic guidance section based on selected chart
+@mini.callback(Output("mini_guidance","children"), Input("mini_chart","value"))
+def update_mini_guidance(chart_name):
+    """Show relevant guidance based on the selected chart"""
+    
+    # Define guidance for each chart type
+    guidance_map = {
+        "Genres pie": {
+            "title": "📊 Genres Distribution (Explore Tab)",
+            "content": [
+                "• 'Other' groups the long tail; large 'Other' ⇒ diverse slate",
+                "• Watch how dominance shifts by Country/Year",
+                "• Compare genre mix across different filters"
+            ]
+        },
+        "Word cloud": {
+            "title": "☁️ Word Cloud - Titles (Explore Tab)", 
+            "content": [
+                "• Quick vibe check; filter first for better signal",
+                "• Shows most common words in titles",
+                "• Helps understand content themes and trends"
+            ]
+        },
+        "Choropleth": {
+            "title": "🗺️ Production Map (Explore Tab)",
+            "content": [
+                "• Darker = more titles; co-productions count for each country",
+                "• See global production footprint",
+                "• Identify key production hubs and markets"
+            ]
+        },
+        "Sunburst": {
+            "title": "☀️ Type → Rating → Top-3 Genres (Explore Tab)",
+            "content": [
+                "• Validate age-brand fit (e.g., TV-MA Dramas vs PG Family)",
+                "• Navigate: outer ring = type, middle = rating, inner = genres",
+                "• Check if content strategy aligns with target demographics"
+            ]
+        },
+        "Genre whitespace": {
+            "title": "🎯 Genre Whitespace Analysis (Decision Insights Tab)",
+            "content": [
+                "• Invest = top-right (quality at scale)",
+                "• Incubate = top-left (quality, low scale)", 
+                "• Fix quality = bottom-right (scale, weak quality)",
+                "• Avoid/experiment = bottom-left (low both)",
+                "• Use dotted medians for a quick benchmark"
+            ]
+        },
+        "Ratings mix": {
+            "title": "📈 Ratings Mix Over Time (Decision Insights Tab)",
+            "content": [
+                "• Is the slate trending more mature (TV-MA/R) or family?",
+                "• 100% stacked bars show proportion over time",
+                "• Track content strategy evolution"
+            ]
+        },
+        "Lorenz (Gini)": {
+            "title": "📊 Hit Concentration Analysis (Decision Insights Tab)",
+            "content": [
+                "• Diagonal = even demand; bow = few hits dominate",
+                "• Rules: <0.40 broad base; 0.40–0.60 mixed; >0.60 hit-concentrated",
+                "• Actions: high Gini → diversify/grow mid-tier; low Gini → add tentpoles"
+            ]
+        },
+        "Top-genre capture": {
+            "title": "🎯 Top-Genre Capture Analysis (Drilldowns Tab)",
+            "content": [
+                "• How many genres cover 50%/80% of demand? Read x at 0.5/0.8",
+                "• Area chart shows cumulative genre coverage",
+                "• Higher curves = more diverse content strategy"
+            ]
+        },
+        "Top-K curve": {
+            "title": "📈 Top-K Curve Analysis (Drilldowns Tab)",
+            "content": [
+                "• If we license top K titles, what share do we cover?",
+                "• Steep = hit-driven; flat = even spread",
+                "• Use slider to explore different K values",
+                "• Helps optimize content acquisition strategy"
+            ]
+        },
+        "Top country pop": {
+            "title": "🌍 Top Countries by Popularity (Drilldowns Tab)",
+            "content": [
+                "• Prioritize export/localization by demand weight",
+                "• Bar chart shows countries ranked by total popularity",
+                "• Focus on high-demand markets for expansion"
+            ]
+        },
+        "Titles per year": {
+            "title": "📅 Titles Per Year Trend (Drilldowns Tab)",
+            "content": [
+                "• Volume trend; pair with Ratings mix for age shift",
+                "• Shows content production timeline",
+                "• Identify growth patterns and seasonal trends"
+            ]
+        }
+    }
+    
+    if chart_name in guidance_map:
+        guidance = guidance_map[chart_name]
+        return html.Div([
+            html.H4(guidance["title"], style={"margin":"0 0 8px 0", "color":"var(--dropdown-fg, #111827)"}),
+            html.Ul([
+                html.Li(item, style={"margin":"4px 0", "fontSize":"14px", "color":"var(--dropdown-fg, #374151)"})
+                for item in guidance["content"]
+            ], style={"margin":"0", "paddingLeft":"20px"})
+        ])
+    else:
+        return html.Div("Select a chart to see guidance", style={"color":"var(--dropdown-fg, #6b7280)", "fontStyle":"italic"})
 
 @mini.callback(Output("mini_country","value"), Input("mini_country","value"), Input("mini_country","options"))
 def _mini_country_valid(val, opts):
